@@ -1,0 +1,26 @@
+# =====================================================================
+# Plastic Waste Detection Demo — requirements
+# ĐÃ VERIFIED chạy end-to-end (setup_model.py + test_model.py + GUI)
+# trên: Windows 11, Python 3.12.7, torch 2.14.0+cpu, numpy 2.5.3
+# Framework YOLOv5 2023 của repo gốc cần các gói import-time dưới đây.
+# Lệnh cài PyTorch CPU riêng (khuyên dùng cho Python 3.10):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# =====================================================================
+
+numpy>=1.26
+torch>=2.2
+torchvision>=0.17
+opencv-python>=4.9.0
+Pillow>=10.0
+PyYAML>=6.0
+
+# setuptools < 81: framework YOLOv5 của repo import pkg_resources (bị bỏ ở setuptools 81+)
+setuptools<81
+
+# Bắt buộc bởi module utils/ của YOLOv5 (được import khi load model)
+matplotlib>=3.7
+pandas>=2.0
+requests>=2.31
+tqdm>=4.66
+psutil>=5.9
+ultralytics==8.0.43   # repo import "ultralytics.yolo.utils" — chỉ có ở bản 8.0.x cũ

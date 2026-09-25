@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=GreenBinAI Plastic Waste Detection
+Comment=Tự khởi động app nhận diện rác thải nhựa khi vào desktop
+Exec=/home/pi/GreenBinAI/plastic-waste-demo/run_pi.sh
+X-GNOME-Autostart-Delay=5
+Terminal=false

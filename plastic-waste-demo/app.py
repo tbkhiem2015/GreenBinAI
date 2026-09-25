@@ -28,6 +28,7 @@ from PIL import Image, ImageTk
 
 import config
 import firebase_store
+import servo_controller
 from detector import WasteDetector
 
 # ---------------------------------------------------------------------------
@@ -69,6 +70,10 @@ class PlasticWasteApp:
         # Trạng thái đẩy Firebase (chế độ webcam — throttle theo thay đổi kết quả)
         self._last_fb_signature = None
         self._last_fb_time = 0.0
+
+        # Trạng thái servo (chế độ webcam — chỉ trigger khi phân loại THAY ĐỔI)
+        self._last_servo_is_plastic = None
+        servo_controller.init()
 
         self._build_style()
         self._build_header()
@@ -297,6 +302,7 @@ class PlasticWasteApp:
                                    interpolation=cv2.INTER_AREA)
 
             annotated, detections, dt = self.detector.detect(image)
+            self._trigger_servo_once(detections)
 
             # Lưu kết quả vào outputs/ (imencode để an toàn đường dẫn Unicode)
             config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -375,6 +381,7 @@ class PlasticWasteApp:
                     annotated, detections, _ = self.detector.detect(frame)
                     last_detections = detections
                     self._firebase_push_webcam(detections)
+                    self._trigger_servo_on_change(detections)
                 else:
                     annotated = WasteDetector._draw(frame.copy(), last_detections)
                     detections = last_detections
@@ -422,6 +429,32 @@ class PlasticWasteApp:
                     self._last_fb_time = now_t
         except Exception:
             pass  # lỗi Firebase không được làm crash luồng camera
+
+    def _trigger_servo_once(self, detections) -> None:
+        """Mode ảnh — mỗi lần chọn ảnh là 1 sự kiện độc lập, luôn trigger."""
+        top = detections[0] if detections else None
+        if top is None:
+            return
+        if firebase_store.is_plastic(top["class_name"]):
+            servo_controller.trigger_plastic()
+        else:
+            servo_controller.trigger_non_plastic()
+
+    def _trigger_servo_on_change(self, detections) -> None:
+        """Mode webcam — chỉ trigger khi phân loại plastic/không-plastic THAY ĐỔI
+        (tránh servo quay liên tục khi cùng 1 vật đứng yên trước camera)."""
+        top = detections[0] if detections else None
+        if top is None:
+            self._last_servo_is_plastic = None  # không có vật -> reset cho lần sau
+            return
+        is_plastic = firebase_store.is_plastic(top["class_name"])
+        if is_plastic == self._last_servo_is_plastic:
+            return
+        self._last_servo_is_plastic = is_plastic
+        if is_plastic:
+            servo_controller.trigger_plastic()
+        else:
+            servo_controller.trigger_non_plastic()
 
     # =========================================================================
     # VÒNG LẶP GUI — nhận kết quả từ thread nền (thread-safe)
@@ -583,6 +616,7 @@ class PlasticWasteApp:
                 if self.cam_thread is not None:
                     self.cam_thread.join(timeout=2.0)
         finally:
+            servo_controller.cleanup()
             self.root.destroy()
 
 

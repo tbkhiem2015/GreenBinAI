@@ -5,6 +5,9 @@
 # Framework YOLOv5 2023 của repo gốc cần các gói import-time dưới đây.
 # Lệnh cài PyTorch CPU riêng (khuyên dùng cho Python 3.10):
 #   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# Trên Raspberry Pi 4 nếu gặp "Illegal instruction" (SIGILL, thường ngay sau
+# "Fusing layers..."): export OPENBLAS_CORETYPE=ARMV8 OPENBLAS_NUM_THREADS=1
+# OMP_NUM_THREADS=1 trước khi chạy — xem README.md mục "Illegal instruction trên Pi 4".
 # =====================================================================
 
 numpy>=1.26
@@ -24,3 +27,8 @@ requests>=2.31
 tqdm>=4.66
 psutil>=5.9
 ultralytics==8.0.43   # repo import "ultralytics.yolo.utils" — chỉ có ở bản 8.0.x cũ
+
+# Điều khiển servo SG92R (servo_controller.py) — chỉ cài được trên Raspberry Pi/Linux.
+# Trên Windows marker này khiến pip bỏ qua dòng; servo_controller.py cũng tự vô hiệu
+# hoá (không lỗi) khi thiếu package này.
+RPi.GPIO; sys_platform == "linux"

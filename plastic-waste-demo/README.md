@@ -264,6 +264,7 @@ Xem dữ liệu: Firebase Console → Realtime Database → node `detections/`, 
 | FPS thấp (Windows CPU) | Giảm `Input size` xuống 320/480; hoặc tăng "Infer mỗi N khung" lên 2–3 |
 | Lỗi `matplotlib`/`pandas` import | Chưa cài đủ requirements → `pip install -r requirements.txt` |
 | Tkinter báo lỗi font "Segoe UI" | Chỉ thấy trên hệ ngoài Windows → app tự fallback font hệ thống (trên Pi dùng default) |
+| `Illegal instruction` (crash ~1 phút sau khi chạy, ngay sau `Fusing layers...`) trên Pi | SIGILL từ OpenBLAS/NumPy dispatch sai tập lệnh CPU cho Cortex-A72 → xem mục "Illegal instruction trên Pi 4" bên dưới |
 
 ## 🍓 Chuyển sang Raspberry Pi 4
 
@@ -297,10 +298,84 @@ USB Webcam → Raspberry Pi 4 → best.pt (YOLOv5s) → Detection → Tkinter GU
    - Không dùng CUDA — tự chạy CPU (`torch.cuda.is_available()` tự phát hiện).
 3. Hiệu năng tham khảo (từ README repo gốc): ~**2 FPS @ 640px** trên Pi 4B;
    với `imgsz=320` + interval 2–3, trải nghiệm demo realtime ở mức khả dụng.
-4. Phần GPIO (servo/LED của dự án gốc, `RPi.GPIO`) **không** được dùng trong demo
-   này — khi cần tích hợp firmware phân loại, kết nối qua `detector.detect()`
-   (danh sách detection chuẩn JSON), xem `src/plastic_waste_detector/pi_controller.py`
-   của repo gốc để tham khảo.
+4. **Servo SG92R phân loại kết quả** (`servo_controller.py`):
+   - Đấu servo: dây tín hiệu (thường màu vàng/cam) → **GPIO17** (BCM, PIN vật lý
+     **11**); dây nguồn 5V → PIN 2/4; dây GND → PIN 6/9/14... (bất kỳ chân GND nào).
+   - Nhận diện ra **plastic** → servo quay **phải** `SERVO_ANGLE_OFFSET` độ (mặc
+     định 60°), giữ `SERVO_HOLD_SECONDS` giây (mặc định 2s), rồi về vị trí cũ.
+   - Nhận diện ra **không phải plastic** → servo quay **trái** tương tự.
+   - Cài `pip install RPi.GPIO` (chỉ chạy trên Pi/Linux — trong `requirements.txt`
+     đã đánh dấu marker để không cài nhầm trên Windows).
+   - Chỉnh góc/thời gian/chân GPIO trong `config.py` (`SERVO_*`); đặt
+     `SERVO_ENABLED = False` để tắt hẳn khi demo trên PC không có GPIO.
+   - Ở chế độ webcam, servo chỉ trigger khi **kết quả phân loại thay đổi** (tránh
+     quay liên tục khi cùng 1 vật đứng yên trước camera); ở chế độ ảnh, mỗi lần
+     chọn ảnh luôn trigger 1 lần theo kết quả.
+
+### ⚠️ `Illegal instruction` trên Pi 4
+
+Crash (SIGILL) thường xảy ra ngay sau dòng `Fusing layers...` (bước `model.fuse()`
+trong `attempt_load`) — là lỗi kinh điển của OpenBLAS/NumPy trên ARM: thư viện tự
+phát hiện sai loại lõi CPU và dùng tập lệnh mà Cortex-A72 không hỗ trợ, chứ
+không phải lỗi ở code app hay ở model.
+
+1. Xác nhận đang chạy Pi OS **64-bit** (bắt buộc, không dùng bản 32-bit):
+   ```bash
+   uname -m   # phải in ra aarch64 — nếu ra armv7l, phải cài lại Pi OS 64-bit
+   ```
+2. Ép OpenBLAS nhận đúng loại lõi và tắt đa luồng (thường fix được ngay):
+   ```bash
+   export OPENBLAS_CORETYPE=ARMV8
+   export OPENBLAS_NUM_THREADS=1
+   export OMP_NUM_THREADS=1
+   python app.py
+   ```
+   Nếu hết lỗi, thêm 3 dòng `export` này vào `~/.bashrc` (hoặc đầu `run_gui.bat`
+   tương đương trên Pi) để không phải gõ lại mỗi lần chạy.
+3. Nếu vẫn crash: cài lại `torch`/`numpy` đúng wheel `aarch64` chính thức (không
+   qua piwheels) rồi cài lại requirements:
+   ```bash
+   pip uninstall -y torch torchvision numpy
+   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+   pip install -r requirements.txt
+   ```
+
+### 🚀 Tự khởi động cùng Raspberry Pi 4 (autostart)
+
+Thay vì phải gõ tay `cd` → `source venv` → `export ...` → `python app.py` mỗi
+lần bật máy, dùng script `run_pi.sh` (đã gộp sẵn các bước đó, kèm log ra
+`outputs/run.log` và tự khởi động lại nếu app bị crash) + autostart theo
+desktop session của Pi OS.
+
+1. Bật auto-login vào Desktop (bắt buộc — autostart chỉ chạy khi có desktop
+   session, không chạy ở màn hình đăng nhập):
+   ```bash
+   sudo raspi-config
+   # System Options -> Boot / Auto Login -> Desktop Autologin
+   ```
+2. Cấp quyền thực thi cho script:
+   ```bash
+   cd ~/GreenBinAI/plastic-waste-demo
+   chmod +x run_pi.sh
+   ```
+3. Copy file mẫu `greenbinai-autostart.desktop` vào thư mục autostart, sửa lại
+   đường dẫn `Exec=` cho đúng vị trí thật của project (nếu username/thư mục
+   khác `pi`/`GreenBinAI`):
+   ```bash
+   mkdir -p ~/.config/autostart
+   cp greenbinai-autostart.desktop ~/.config/autostart/
+   nano ~/.config/autostart/greenbinai-autostart.desktop   # sửa dòng Exec= nếu cần
+   ```
+4. Khởi động lại để kiểm tra:
+   ```bash
+   sudo reboot
+   ```
+   App sẽ tự mở sau khi desktop load xong (delay 5s theo `X-GNOME-Autostart-Delay`
+   để camera/USB kịp sẵn sàng). Xem log tại `outputs/run.log` nếu app không lên.
+5. Tắt autostart: xoá file khỏi `~/.config/autostart/`:
+   ```bash
+   rm ~/.config/autostart/greenbinai-autostart.desktop
+   ```
 
 ## 📄 License / Credits
 

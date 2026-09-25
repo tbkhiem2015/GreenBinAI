@@ -97,3 +97,14 @@ PLASTIC_CLASSES = {
 # Webcam: chỉ đẩy lên Firebase khi KẾT QUẢ THAY ĐỔI và cách nhau ít nhất X giây
 WEBCAM_FIREBASE_MIN_INTERVAL_SEC = 5.0
 
+# ---------------------------------------------------------------------------
+# Servo SG92R — báo hiệu phân loại plastic / không phải plastic
+# Đấu dây: GPIO17 (BCM numbering) = PIN vật lý 11 trên Raspberry Pi 4.
+# ---------------------------------------------------------------------------
+SERVO_ENABLED = True        # đặt False để tắt hẳn (vd: chạy demo trên PC không có GPIO)
+SERVO_GPIO_PIN = 17         # BCM numbering (PIN vật lý 11)
+SERVO_PWM_FREQ_HZ = 50      # tần số PWM tiêu chuẩn cho servo hobby
+SERVO_ANGLE_CENTER = 90.0   # vị trí nghỉ / trung tâm
+SERVO_ANGLE_OFFSET = 60.0   # độ lệch khi phân loại (plastic: +, không phải plastic: -)
+SERVO_HOLD_SECONDS = 2.0    # thời gian giữ ở vị trí lệch trước khi quay về vị trí cũ
+
